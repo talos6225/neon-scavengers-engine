@@ -1,0 +1,1005 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Neon Scavengers</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
+
+        body {
+            font-family: 'Orbitron', sans-serif;
+            overflow: hidden;
+            background-color: #050505;
+            touch-action: none; /* Prevent pull-to-refresh on mobile */
+        }
+
+        /* Neon Glow Effects */
+        .neon-text {
+            text-shadow: 0 0 5px #fff, 0 0 10px #fff, 0 0 20px #0ff, 0 0 30px #0ff, 0 0 40px #0ff;
+        }
+        
+        .neon-box {
+            box-shadow: 0 0 5px #0ff, 0 0 10px #0ff, inset 0 0 5px #0ff; 
+        }
+
+        /* Custom Scrollbar for Leaderboard */
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: #000; }
+        ::-webkit-scrollbar-thumb { background: #0ff; border-radius: 5px; }
+
+        /* Mobile Controls */
+        #joystick-zone {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            width: 150px;
+            height: 150px;
+            z-index: 50;
+            display: none; /* Shown via JS on touch devices */
+        }
+
+        .modal-bg {
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(5px);
+        }
+
+        /* Game Elements */
+        canvas {
+            display: block;
+            background: radial-gradient(circle at center, #1a1a2e 0%, #000000 100%);
+        }
+    </style>
+</head>
+<body class="text-white h-screen w-screen relative select-none">
+
+    <!-- LOGIN SCREEN -->
+    <div id="login-screen" class="absolute inset-0 z-50 flex items-center justify-center modal-bg">
+        <div class="bg-gray-900 border-2 border-cyan-500 p-8 rounded-xl max-w-md w-full mx-4 shadow-2xl neon-box text-center">
+            <h1 class="text-4xl font-bold mb-2 text-cyan-400 neon-text">NEON SCAVENGERS</h1>
+            <p class="text-gray-400 mb-6 text-sm tracking-wider">MULTIPLAYER ARCADE</p>
+
+            <div class="space-y-4 text-left">
+                <div>
+                    <label class="block text-xs text-cyan-300 mb-1">PILOT NAME</label>
+                    <input type="text" id="username-input" class="w-full bg-gray-800 border border-cyan-600 rounded p-3 text-white focus:outline-none focus:border-white transition-colors" placeholder="Ex: Maverick" maxlength="10">
+                </div>
+                <div>
+                    <label class="block text-xs text-cyan-300 mb-1">ROOM ID</label>
+                    <input type="text" id="room-input" class="w-full bg-gray-800 border border-cyan-600 rounded p-3 text-white focus:outline-none focus:border-white transition-colors" placeholder="Ex: squad1" value="lobby1">
+                </div>
+                
+                <div>
+                    <label class="block text-xs text-cyan-300 mb-1">SHIP COLOR</label>
+                    <div class="flex justify-between gap-2">
+                        <button onclick="selectColor('#00ffff')" class="w-10 h-10 rounded-full bg-cyan-400 border-2 border-white hover:scale-110 transition-transform color-btn selected-color ring-2 ring-white"></button>
+                        <button onclick="selectColor('#ff00ff')" class="w-10 h-10 rounded-full bg-fuchsia-500 border-2 border-transparent hover:scale-110 transition-transform color-btn opacity-60"></button>
+                        <button onclick="selectColor('#ffff00')" class="w-10 h-10 rounded-full bg-yellow-400 border-2 border-transparent hover:scale-110 transition-transform color-btn opacity-60"></button>
+                        <button onclick="selectColor('#00ff00')" class="w-10 h-10 rounded-full bg-green-500 border-2 border-transparent hover:scale-110 transition-transform color-btn opacity-60"></button>
+                        <button onclick="selectColor('#ff4500')" class="w-10 h-10 rounded-full bg-orange-500 border-2 border-transparent hover:scale-110 transition-transform color-btn opacity-60"></button>
+                    </div>
+                </div>
+
+                <button id="join-btn" class="w-full mt-6 bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3 rounded shadow-[0_0_15px_rgba(0,255,255,0.5)] transition-all transform active:scale-95">
+                    LAUNCH SHIP
+                </button>
+            </div>
+            <p class="mt-4 text-xs text-gray-500">Share the Room ID to play together!</p>
+        </div>
+    </div>
+
+    <!-- GAME OVER SCREEN -->
+    <div id="game-over-screen" class="absolute inset-0 z-50 flex items-center justify-center modal-bg hidden">
+        <div class="bg-gray-900 border-2 border-red-500 p-8 rounded-xl max-w-md w-full mx-4 shadow-2xl text-center">
+            <h1 class="text-4xl font-bold mb-2 text-red-500 neon-text">MISSION OVER</h1>
+            <p class="text-gray-400 mb-6 text-sm tracking-wider">RETURN TO BASE</p>
+            
+            <div class="mb-8">
+                <div class="text-xs text-gray-500 uppercase tracking-widest">Final Score</div>
+                <div id="final-score" class="text-6xl font-bold text-white">0</div>
+            </div>
+
+            <button onclick="location.reload()" class="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-3 rounded shadow-[0_0_15px_rgba(255,0,0,0.5)] transition-all transform active:scale-95">
+                PLAY AGAIN
+            </button>
+        </div>
+    </div>
+
+    <!-- HUD -->
+    <div id="game-ui" class="absolute inset-0 pointer-events-none hidden">
+        <!-- Scoreboard -->
+        <div class="absolute top-4 left-4 z-10">
+            <div class="bg-gray-900/80 border border-cyan-500/30 p-4 rounded-lg backdrop-blur-sm min-w-[200px]">
+                <h3 class="text-cyan-400 text-xs font-bold mb-2 uppercase tracking-widest border-b border-cyan-500/30 pb-1">Leaderboard</h3>
+                <ul id="leaderboard" class="space-y-1 text-sm">
+                    <!-- Populated by JS -->
+                    <li class="text-gray-400">Waiting for pilots...</li>
+                </ul>
+            </div>
+        </div>
+        
+        <!-- Timer -->
+        <div class="absolute top-4 left-1/2 transform -translate-x-1/2 z-10">
+            <div class="bg-gray-900/80 border border-yellow-500/50 px-6 py-2 rounded-full backdrop-blur-sm">
+                <span id="timer-display" class="text-2xl font-bold text-yellow-400 font-mono">60</span>
+            </div>
+        </div>
+        
+        <!-- Room Info & Controls -->
+        <div class="absolute top-4 right-4 z-10 text-right">
+            <div class="text-xs text-gray-400">ROOM</div>
+            <div id="room-display" class="text-xl font-bold text-white neon-text">---</div>
+            <div class="text-xs text-cyan-500 mt-1" id="ping-display">SCROLL TO ZOOM</div>
+        </div>
+
+        <!-- Controls Hint -->
+        <div id="controls-hint" class="absolute bottom-4 right-4 text-xs text-gray-500 md:block hidden">
+            USE <span class="text-white font-bold">ARROWS/WASD</span> TO MOVE • <span class="text-white font-bold">MOUSE WHEEL</span> TO ZOOM
+        </div>
+    </div>
+
+    <!-- GAME CANVAS -->
+    <canvas id="game-canvas"></canvas>
+
+    <!-- MOBILE JOYSTICK ZONE -->
+    <div id="joystick-zone"></div>
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, setDoc, onSnapshot, updateDoc, deleteDoc, addDoc, serverTimestamp, query, orderBy } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- CONFIG & STATE ---
+        // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+  const firebaseConfig = {
+  apiKey: "AIzaSyDfJvS4g3nVtNNIigCZPYTfd2zk5z7bgwU",
+  authDomain: "neon-scavengers.firebaseapp.com",
+  projectId: "neon-scavengers",
+  storageBucket: "neon-scavengers.firebasestorage.app",
+  messagingSenderId: "542135028428",
+  appId: "1:542135028428:web:97f21060f18d42612b9069",
+  measurementId: "G-CLJEQBCQ8E"
+};
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const appId = 'my-neon-game';
+
+        // Constants
+        const WORLD_WIDTH = 4000;
+        const WORLD_HEIGHT = 4000;
+
+        // Game State
+        let currentUser = null;
+        let roomId = "";
+        let playerColor = "#00ffff";
+        let playerName = "Pilot";
+        let gameTime = 120; // 2 minutes for bigger map
+        
+        // Listeners (Global references to unsubscribe functions)
+        let unsubscribePlayers = null;
+        let unsubscribeStars = null;
+
+        // Engine State
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+        const players = {}; // Remote players
+        const stars = {};   // Collectible stars
+        const backgroundStars = []; // Parallax stars
+        
+        // Static Map Data (Generated deterministically)
+        const obstacles = [];
+        const portals = [];
+        const speedPads = [];
+
+        // Camera State
+        const camera = { 
+            x: 0, 
+            y: 0,
+            zoom: 1,
+            baseZoom: 1,
+            manualZoomFactor: 1
+        };
+        
+        // Local Player State
+        const localPlayer = {
+            x: WORLD_WIDTH / 2,
+            y: WORLD_HEIGHT / 2,
+            angle: 0,
+            score: 0,
+            vx: 0,
+            vy: 0,
+            accel: 0.8,
+            friction: 0.96,
+            maxSpeed: 15, // Increased max speed
+            radius: 20
+        };
+
+        // Inputs
+        const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false, w: false, a: false, s: false, d: false };
+        let joystickVector = { x: 0, y: 0 };
+        let lastUpdate = 0;
+        let isGameRunning = false;
+        let lastTime = 0;
+
+        // --- AUTH & SETUP ---
+
+        async function initAuth() {
+            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                 await signInWithCustomToken(auth, __initial_auth_token);
+            } else {
+                 await signInAnonymously(auth);
+            }
+        }
+
+        initAuth();
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                currentUser = user;
+            }
+        });
+
+        // --- UI HANDLERS ---
+        window.selectColor = (color) => {
+            playerColor = color;
+            document.querySelectorAll('.color-btn').forEach(btn => {
+                btn.classList.remove('ring-2', 'ring-white', 'opacity-100');
+                btn.classList.add('opacity-60');
+            });
+            event.target.classList.remove('opacity-60');
+            event.target.classList.add('ring-2', 'ring-white', 'opacity-100');
+        };
+
+        document.getElementById('join-btn').addEventListener('click', () => {
+            const nameInput = document.getElementById('username-input').value.trim();
+            const roomInput = document.getElementById('room-input').value.trim();
+            
+            if (!nameInput || !roomInput) {
+                alert("Please enter a name and room ID.");
+                return;
+            }
+
+            playerName = nameInput;
+            roomId = roomInput.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+            if (!currentUser) return;
+
+            startGame();
+        });
+
+        // Zoom Controls
+        window.addEventListener('wheel', (e) => {
+            if (!isGameRunning) return;
+            e.preventDefault();
+            // Scroll down (positive) = Zoom Out
+            if (e.deltaY > 0) {
+                camera.manualZoomFactor = Math.max(0.3, camera.manualZoomFactor - 0.05);
+            } else {
+                camera.manualZoomFactor = Math.min(2.0, camera.manualZoomFactor + 0.05);
+            }
+        }, { passive: false });
+
+        // --- MAP GENERATION (Deterministic) ---
+        // Simple seeded random to ensure all players see same map for same Room ID
+        function seededRandom(seed) {
+            let t = seed += 0x6D2B79F5;
+            t = Math.imul(t ^ t >>> 15, t | 1);
+            t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+            return ((t ^ t >>> 14) >>> 0) / 4294967296;
+        }
+
+        function generateMap(seedStr) {
+            let seed = 0;
+            for(let i=0; i<seedStr.length; i++) seed += seedStr.charCodeAt(i);
+            
+            obstacles.length = 0;
+            portals.length = 0;
+            speedPads.length = 0;
+
+            // Generate Obstacles (Debris)
+            const obsCount = 40;
+            for(let i=0; i<obsCount; i++) {
+                seed++;
+                const r1 = seededRandom(seed);
+                seed++;
+                const r2 = seededRandom(seed);
+                seed++;
+                const r3 = seededRandom(seed);
+                
+                obstacles.push({
+                    x: r1 * WORLD_WIDTH,
+                    y: r2 * WORLD_HEIGHT,
+                    radius: 40 + r3 * 60,
+                    rotation: r1 * Math.PI * 2,
+                    spinSpeed: (r2 - 0.5) * 0.02
+                });
+            }
+
+            // Generate Portals
+            const portalCount = 4; // Pairs
+            for(let i=0; i<portalCount; i++) {
+                seed++; const x1 = seededRandom(seed) * WORLD_WIDTH;
+                seed++; const y1 = seededRandom(seed) * WORLD_HEIGHT;
+                seed++; const x2 = seededRandom(seed) * WORLD_WIDTH;
+                seed++; const y2 = seededRandom(seed) * WORLD_HEIGHT;
+                
+                // Color based on index
+                const color = i % 2 === 0 ? '#ff00ff' : '#00ff00';
+                
+                portals.push({
+                    id: i,
+                    x1: x1, y1: y1,
+                    x2: x2, y2: y2,
+                    radius: 40,
+                    color: color
+                });
+            }
+
+            // Generate Speed Pads
+            const padCount = 20;
+            for(let i=0; i<padCount; i++) {
+                seed++; const px = seededRandom(seed) * WORLD_WIDTH;
+                seed++; const py = seededRandom(seed) * WORLD_HEIGHT;
+                seed++; const angle = seededRandom(seed) * Math.PI * 2;
+                
+                speedPads.push({
+                    x: px, y: py,
+                    angle: angle,
+                    radius: 50
+                });
+            }
+        }
+
+        // --- GAME LOGIC ---
+
+        function startGame() {
+            generateMap(roomId); // Generate world
+            
+            document.getElementById('login-screen').classList.add('hidden');
+            document.getElementById('game-ui').classList.remove('hidden');
+            document.getElementById('room-display').innerText = roomId.toUpperCase();
+            
+            if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+                document.getElementById('joystick-zone').style.display = 'block';
+                setupJoystick();
+            }
+
+            isGameRunning = true;
+            resizeCanvas();
+            initBackgroundStars();
+            window.addEventListener('resize', resizeCanvas);
+            
+            setupFirestoreListeners();
+            
+            lastTime = performance.now();
+            requestAnimationFrame(gameLoop);
+            
+            window.addEventListener('keydown', (e) => keys[e.key] = true);
+            window.addEventListener('keyup', (e) => keys[e.key] = false);
+
+            const timerInterval = setInterval(() => {
+                if (!isGameRunning) {
+                    clearInterval(timerInterval);
+                    return;
+                }
+                gameTime--;
+                document.getElementById('timer-display').innerText = gameTime;
+                
+                if (gameTime <= 0) {
+                    endGame();
+                    clearInterval(timerInterval);
+                }
+            }, 1000);
+        }
+
+        function endGame() {
+            isGameRunning = false;
+            document.getElementById('game-ui').classList.add('hidden');
+            document.getElementById('game-over-screen').classList.remove('hidden');
+            document.getElementById('joystick-zone').style.display = 'none';
+            document.getElementById('final-score').innerText = localPlayer.score;
+        }
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        
+        function initBackgroundStars() {
+            backgroundStars.length = 0;
+            for(let i=0; i<300; i++) {
+                backgroundStars.push({
+                    x: Math.random() * WORLD_WIDTH,
+                    y: Math.random() * WORLD_HEIGHT,
+                    size: Math.random() * 2,
+                    depth: Math.random() * 0.5 + 0.1 
+                });
+            }
+        }
+
+        function setupFirestoreListeners() {
+            if (!currentUser) return;
+
+            // Clear existing listeners if any
+            if (unsubscribePlayers) unsubscribePlayers();
+            if (unsubscribeStars) unsubscribeStars();
+
+            const playersColName = `room_${roomId}_players`;
+            const starsColName = `room_${roomId}_stars`;
+
+            const playersRef = collection(db, 'artifacts', appId, 'public', 'data', playersColName);
+            
+            unsubscribePlayers = onSnapshot(playersRef, (snapshot) => {
+                snapshot.docChanges().forEach((change) => {
+                    const data = change.doc.data();
+                    const pid = change.doc.id;
+                    
+                    if (change.type === "added" || change.type === "modified") {
+                        if (pid === currentUser.uid) {
+                            localPlayer.score = data.score || 0;
+                        } else {
+                            if (!players[pid]) players[pid] = { ...data };
+                            
+                            players[pid].targetX = data.x;
+                            players[pid].targetY = data.y;
+                            players[pid].targetAngle = data.angle || 0;
+                            players[pid].color = data.color;
+                            players[pid].name = data.name;
+                            players[pid].score = data.score;
+                            
+                            if (players[pid].currentX === undefined) {
+                                players[pid].currentX = data.x;
+                                players[pid].currentY = data.y;
+                                players[pid].currentAngle = data.angle || 0;
+                            }
+                        }
+                    }
+                    if (change.type === "removed") {
+                        delete players[pid];
+                    }
+                });
+                updateLeaderboard();
+            }, (error) => console.error("Players sync error:", error));
+
+            const starsRef = collection(db, 'artifacts', appId, 'public', 'data', starsColName);
+            
+            unsubscribeStars = onSnapshot(starsRef, (snapshot) => {
+                snapshot.docChanges().forEach((change) => {
+                    if (change.type === "added" || change.type === "modified") {
+                        stars[change.doc.id] = change.doc.data();
+                    }
+                    if (change.type === "removed") {
+                        delete stars[change.doc.id];
+                    }
+                });
+            }, (error) => console.error("Stars sync error:", error));
+
+            const myDocRef = doc(db, 'artifacts', appId, 'public', 'data', playersColName, currentUser.uid);
+            
+            // Random start away from edges
+            localPlayer.x = Math.random() * (WORLD_WIDTH - 500) + 250;
+            localPlayer.y = Math.random() * (WORLD_HEIGHT - 500) + 250;
+
+            setDoc(myDocRef, {
+                x: localPlayer.x,
+                y: localPlayer.y,
+                angle: 0,
+                color: playerColor,
+                name: playerName,
+                score: 0,
+                lastSeen: serverTimestamp()
+            });
+
+            setInterval(() => {
+                if(isGameRunning) {
+                     updateDoc(myDocRef, { lastSeen: serverTimestamp() }).catch(() => {});
+                }
+            }, 5000);
+        }
+
+        // --- GAME LOOP ---
+
+        function gameLoop(timestamp) {
+            if (!isGameRunning) return;
+            const deltaTime = timestamp - lastTime;
+            lastTime = timestamp;
+
+            updatePhysics();
+            updateCamera();
+            updateNetwork(timestamp);
+            spawnLogic();
+            render();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        function updatePhysics() {
+            // 1. Controls
+            let dx = 0;
+            let dy = 0;
+
+            if (keys.ArrowUp || keys.w) dy -= 1;
+            if (keys.ArrowDown || keys.s) dy += 1;
+            if (keys.ArrowLeft || keys.a) dx -= 1;
+            if (keys.ArrowRight || keys.d) dx += 1;
+
+            dx += joystickVector.x;
+            dy += joystickVector.y;
+
+            const len = Math.sqrt(dx*dx + dy*dy);
+            if (len > 0) {
+                dx /= len;
+                dy /= len;
+            }
+
+            localPlayer.vx += dx * localPlayer.accel;
+            localPlayer.vy += dy * localPlayer.accel;
+            localPlayer.vx *= localPlayer.friction;
+            localPlayer.vy *= localPlayer.friction;
+
+            // 2. Speed Pads (Boost)
+            for(let pad of speedPads) {
+                const dist = Math.sqrt((localPlayer.x - pad.x)**2 + (localPlayer.y - pad.y)**2);
+                if (dist < pad.radius) {
+                    // Boost in direction of pad angle
+                    localPlayer.vx += Math.cos(pad.angle) * 1.5;
+                    localPlayer.vy += Math.sin(pad.angle) * 1.5;
+                }
+            }
+
+            // 3. Max Speed Cap
+            const speed = Math.sqrt(localPlayer.vx**2 + localPlayer.vy**2);
+            if (speed > localPlayer.maxSpeed) {
+                const ratio = localPlayer.maxSpeed / speed;
+                localPlayer.vx *= ratio;
+                localPlayer.vy *= ratio;
+            }
+
+            // 4. Apply Velocity
+            localPlayer.x += localPlayer.vx;
+            localPlayer.y += localPlayer.vy;
+
+            // 5. Obstacle Collision (Bounce)
+            for(let obs of obstacles) {
+                const dist = Math.sqrt((localPlayer.x - obs.x)**2 + (localPlayer.y - obs.y)**2);
+                if (dist < obs.radius + localPlayer.radius) {
+                    // Normalize collision vector
+                    const nx = (localPlayer.x - obs.x) / dist;
+                    const ny = (localPlayer.y - obs.y) / dist;
+                    
+                    // Reflect velocity
+                    const dot = localPlayer.vx * nx + localPlayer.vy * ny;
+                    localPlayer.vx -= 2 * dot * nx;
+                    localPlayer.vy -= 2 * dot * ny;
+                    
+                    // Push out
+                    localPlayer.x = obs.x + nx * (obs.radius + localPlayer.radius + 1);
+                    localPlayer.y = obs.y + ny * (obs.radius + localPlayer.radius + 1);
+                    
+                    // Dampen
+                    localPlayer.vx *= 0.8;
+                    localPlayer.vy *= 0.8;
+                }
+            }
+            
+            // 6. Portal Teleport (With cool-down check implicity by pushing away)
+            for(let portal of portals) {
+                // Check Entrance 1
+                let d1 = Math.sqrt((localPlayer.x - portal.x1)**2 + (localPlayer.y - portal.y1)**2);
+                if (d1 < portal.radius - 10) {
+                    localPlayer.x = portal.x2 + (Math.random()-0.5)*50; 
+                    localPlayer.y = portal.y2 + (Math.random()-0.5)*50;
+                    playCollectSound(200); // reuse sound logic
+                }
+                
+                // Check Entrance 2
+                let d2 = Math.sqrt((localPlayer.x - portal.x2)**2 + (localPlayer.y - portal.y2)**2);
+                if (d2 < portal.radius - 10) {
+                    localPlayer.x = portal.x1 + (Math.random()-0.5)*50; 
+                    localPlayer.y = portal.y1 + (Math.random()-0.5)*50;
+                    playCollectSound(200);
+                }
+            }
+
+            // 7. World Bounds
+            if (localPlayer.x < localPlayer.radius) { localPlayer.x = localPlayer.radius; localPlayer.vx *= -0.5; }
+            if (localPlayer.x > WORLD_WIDTH - localPlayer.radius) { localPlayer.x = WORLD_WIDTH - localPlayer.radius; localPlayer.vx *= -0.5; }
+            if (localPlayer.y < localPlayer.radius) { localPlayer.y = localPlayer.radius; localPlayer.vy *= -0.5; }
+            if (localPlayer.y > WORLD_HEIGHT - localPlayer.radius) { localPlayer.y = WORLD_HEIGHT - localPlayer.radius; localPlayer.vy *= -0.5; }
+
+            // 8. Rotation
+            if (speed > 0.5) {
+                const targetAngle = Math.atan2(localPlayer.vy, localPlayer.vx) + Math.PI / 2;
+                let diff = targetAngle - localPlayer.angle;
+                while (diff > Math.PI) diff -= Math.PI * 2;
+                while (diff < -Math.PI) diff += Math.PI * 2;
+                localPlayer.angle += diff * 0.15;
+            }
+
+            checkCollisions();
+        }
+
+        function updateCamera() {
+            // Auto Zoom Logic: faster = zoom out
+            const speed = Math.sqrt(localPlayer.vx**2 + localPlayer.vy**2);
+            // Map speed 0-15 to zoom factor 1.0 - 0.6
+            const targetBaseZoom = 1.0 - Math.min(speed / 25, 0.4);
+            
+            // Smoothly lerp base zoom
+            camera.baseZoom += (targetBaseZoom - camera.baseZoom) * 0.05;
+            
+            // Calculate final zoom
+            camera.zoom = camera.baseZoom * camera.manualZoomFactor;
+
+            // Center camera on player
+            // But we need to account for scale in the centering logic during render
+            // Camera (x,y) represents the center point in WORLD coordinates
+            const targetX = localPlayer.x;
+            const targetY = localPlayer.y;
+
+            camera.x += (targetX - camera.x) * 0.1;
+            camera.y += (targetY - camera.y) * 0.1;
+        }
+
+        function updateNetwork(timestamp) {
+            if (timestamp - lastUpdate > 80) {
+                const playersColName = `room_${roomId}_players`;
+                const myDocRef = doc(db, 'artifacts', appId, 'public', 'data', playersColName, currentUser.uid);
+                
+                updateDoc(myDocRef, {
+                    x: localPlayer.x,
+                    y: localPlayer.y,
+                    angle: localPlayer.angle
+                }).catch(e => {});
+                
+                lastUpdate = timestamp;
+            }
+        }
+
+        function spawnLogic() {
+            const starCount = Object.keys(stars).length;
+            if (starCount < 20) { // More stars for big world
+                if (Math.random() < 0.05) {
+                    const starsColName = `room_${roomId}_stars`;
+                    addDoc(collection(db, 'artifacts', appId, 'public', 'data', starsColName), {
+                        x: Math.random() * (WORLD_WIDTH - 100) + 50,
+                        y: Math.random() * (WORLD_HEIGHT - 100) + 50,
+                        type: 'standard'
+                    }).catch(e => {});
+                }
+            }
+        }
+
+        function checkCollisions() {
+            Object.entries(stars).forEach(([id, star]) => {
+                const dist = Math.sqrt((localPlayer.x - star.x) ** 2 + (localPlayer.y - star.y) ** 2);
+                if (dist < localPlayer.radius + 30) {
+                    collectStar(id);
+                }
+            });
+        }
+
+        async function collectStar(starId) {
+            delete stars[starId];
+            const starsColName = `room_${roomId}_stars`;
+            const playersColName = `room_${roomId}_players`;
+            try {
+                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', starsColName, starId));
+                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', playersColName, currentUser.uid), {
+                    score: localPlayer.score + 1
+                });
+                playCollectSound();
+            } catch (e) {}
+        }
+
+        // --- RENDER ---
+
+        function render() {
+            ctx.fillStyle = '#050505';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Save context for Camera Transform
+            ctx.save();
+            
+            // 1. Move to center of screen
+            ctx.translate(canvas.width/2, canvas.height/2);
+            // 2. Scale (Zoom)
+            ctx.scale(camera.zoom, camera.zoom);
+            // 3. Move back by camera position (Camera follows player)
+            ctx.translate(-camera.x, -camera.y);
+            
+            // --- WORLD SPACE RENDERING START ---
+
+            // Draw Parallax Background
+            // Note: Parallax is tricky with zoom/translate. 
+            // We draw them relative to camera to fake depth.
+            // Since we already translated to -camera.x, simply drawing at star.x is standard.
+            // To do parallax, we need to offset based on camera position.
+            backgroundStars.forEach(star => {
+                // Parallax offset
+                const dx = (star.x - camera.x) * star.depth;
+                const dy = (star.y - camera.y) * star.depth;
+                
+                // We must add camera.x back because we are currently in a transformed state 
+                // where (0,0) is the top-left of the world.
+                // Actually, easier way: Draw purely based on relative screen coords before this transform? 
+                // No, let's stick to world space but shift the star.
+                
+                // Effective world pos of star = CameraPos + RelativePos
+                const drawX = camera.x + (star.x - camera.x) * (1 - star.depth * 0.5); 
+                const drawY = camera.y + (star.y - camera.y) * (1 - star.depth * 0.5);
+
+                ctx.fillStyle = `rgba(255, 255, 255, ${0.3 + star.depth * 0.5})`;
+                ctx.beginPath();
+                ctx.arc(drawX, drawY, star.size / camera.zoom + 0.5, 0, Math.PI*2);
+                ctx.fill();
+            });
+
+            // Draw World Boundary
+            ctx.strokeStyle = '#00ffff';
+            ctx.lineWidth = 10;
+            ctx.shadowBlur = 30;
+            ctx.shadowColor = '#00ffff';
+            ctx.strokeRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+            ctx.shadowBlur = 0;
+
+            // Grid
+            drawWorldGrid();
+
+            // Draw Speed Pads
+            speedPads.forEach(pad => {
+                ctx.save();
+                ctx.translate(pad.x, pad.y);
+                ctx.rotate(pad.angle);
+                ctx.fillStyle = 'rgba(0, 100, 255, 0.3)';
+                ctx.beginPath();
+                ctx.moveTo(-20, -20); ctx.lineTo(20, 0); ctx.lineTo(-20, 20);
+                ctx.fill();
+                ctx.fillStyle = 'rgba(0, 200, 255, 0.8)';
+                ctx.beginPath();
+                ctx.moveTo(-10, -10); ctx.lineTo(10, 0); ctx.lineTo(-10, 10);
+                ctx.fill();
+                ctx.restore();
+            });
+
+            // Draw Obstacles
+            obstacles.forEach(obs => {
+                obs.rotation += obs.spinSpeed;
+                ctx.save();
+                ctx.translate(obs.x, obs.y);
+                ctx.rotate(obs.rotation);
+                
+                ctx.strokeStyle = '#ff0055';
+                ctx.lineWidth = 3;
+                ctx.fillStyle = 'rgba(50, 0, 20, 0.5)';
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = '#ff0055';
+                
+                ctx.beginPath();
+                // Draw jagged shape
+                const sides = 8;
+                for(let i=0; i<=sides; i++) {
+                    const theta = (i / sides) * Math.PI * 2;
+                    const r = obs.radius * (0.8 + Math.cos(theta * 3) * 0.2); // bumpy
+                    ctx.lineTo(Math.cos(theta) * r, Math.sin(theta) * r);
+                }
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+                ctx.restore();
+            });
+
+            // Draw Portals
+            const time = Date.now() / 500;
+            portals.forEach(p => {
+                const drawPortal = (x, y, color) => {
+                    ctx.save();
+                    ctx.translate(x, y);
+                    ctx.rotate(time);
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = 4;
+                    ctx.shadowBlur = 20;
+                    ctx.shadowColor = color;
+                    
+                    // Swirling rings
+                    for(let i=0; i<3; i++) {
+                        ctx.rotate(Math.PI / 3);
+                        ctx.beginPath();
+                        ctx.arc(0, 0, p.radius * (0.5 + i*0.2 + Math.sin(time*2)*0.1), 0, Math.PI * 1.5);
+                        ctx.stroke();
+                    }
+                    ctx.restore();
+                };
+                drawPortal(p.x1, p.y1, p.color);
+                drawPortal(p.x2, p.y2, p.color);
+            });
+
+            // Stars
+            Object.values(stars).forEach(star => {
+                drawStar(star.x, star.y);
+            });
+
+            // Remote Players
+            Object.values(players).forEach(p => {
+                if (p.currentX !== undefined) {
+                    p.currentX += (p.targetX - p.currentX) * 0.15;
+                    p.currentY += (p.targetY - p.currentY) * 0.15;
+                    if (p.targetAngle !== undefined) {
+                         p.currentAngle = p.currentAngle || 0;
+                         let diff = p.targetAngle - p.currentAngle;
+                         while (diff > Math.PI) diff -= Math.PI * 2;
+                         while (diff < -Math.PI) diff += Math.PI * 2;
+                         p.currentAngle += diff * 0.15;
+                    }
+                    drawPlayer(p.currentX, p.currentY, p.currentAngle || 0, p.color, p.name, false);
+                }
+            });
+
+            // Local Player
+            drawPlayer(localPlayer.x, localPlayer.y, localPlayer.angle, playerColor, playerName, true);
+
+            ctx.restore(); // End Camera Transform
+            
+            // HUD Elements (Minimap arrow etc) could go here
+        }
+
+        function drawWorldGrid() {
+            ctx.strokeStyle = 'rgba(0, 255, 255, 0.05)';
+            ctx.lineWidth = 2;
+            const step = 200;
+            
+            // Draw only visible grid for performance
+            // But with camera transform active, we can just draw loosely
+            // Optimization: Calculate start/end based on camera
+            
+            ctx.beginPath();
+            for (let x = 0; x <= WORLD_WIDTH; x += step) {
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, WORLD_HEIGHT);
+            }
+            for (let y = 0; y <= WORLD_HEIGHT; y += step) {
+                ctx.moveTo(0, y);
+                ctx.lineTo(WORLD_WIDTH, y);
+            }
+            ctx.stroke();
+        }
+
+        function drawPlayer(x, y, angle, color, name, isLocal) {
+            const size = 20;
+
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.rotate(angle);
+
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = color;
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.moveTo(0, -size); 
+            ctx.lineTo(size * 0.8, size); 
+            ctx.lineTo(0, size * 0.7); 
+            ctx.lineTo(-size * 0.8, size); 
+            ctx.closePath();
+            ctx.fill();
+
+            // Cockpit
+            ctx.fillStyle = "rgba(0,0,0,0.5)";
+            ctx.beginPath();
+            ctx.moveTo(0, -size * 0.5);
+            ctx.lineTo(size * 0.3, size * 0.5);
+            ctx.lineTo(-size * 0.3, size * 0.5);
+            ctx.fill();
+            
+            ctx.restore();
+
+            // Name Tag
+            ctx.save();
+            ctx.translate(x, y);
+            // Counter-rotate text so it stays upright? 
+            // Currently using default 0 rotation relative to world, which is upright
+            
+            ctx.shadowBlur = 0;
+            ctx.fillStyle = "white";
+            // Scale text based on zoom so it remains readable
+            const textScale = Math.max(1, 1 / camera.zoom);
+            ctx.font = isLocal ? `bold ${14 * textScale}px Orbitron` : `${12 * textScale}px Orbitron`;
+            ctx.textAlign = "center";
+            ctx.fillText(name, 0, size + 25 * textScale);
+            
+            if(isLocal) {
+                ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
+                ctx.lineWidth = 1 * textScale;
+                ctx.beginPath();
+                ctx.arc(0, 0, 100, 0, Math.PI*2);
+                ctx.stroke();
+            }
+            ctx.restore();
+        }
+
+        function drawStar(x, y) {
+            const pulse = 1 + Math.sin(Date.now() / 200) * 0.2;
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.scale(pulse, pulse);
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = "#FFFF00";
+            ctx.fillStyle = "#FFF";
+            ctx.beginPath();
+            for(let i=0; i<5; i++) {
+                ctx.lineTo(Math.cos((18 + i*72)/180*Math.PI)*12, -Math.sin((18 + i*72)/180*Math.PI)*12);
+                ctx.lineTo(Math.cos((54 + i*72)/180*Math.PI)*6, -Math.sin((54 + i*72)/180*Math.PI)*6);
+            }
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+        }
+
+        function updateLeaderboard() {
+            const list = document.getElementById('leaderboard');
+            const allPlayers = [
+                { ...localPlayer, name: playerName, color: playerColor, id: 'me' },
+                ...Object.values(players)
+            ];
+            allPlayers.sort((a, b) => b.score - a.score);
+            list.innerHTML = allPlayers.map(p => `
+                <li class="flex justify-between items-center ${p.id === 'me' ? 'text-white font-bold' : 'text-gray-400'}">
+                    <span class="flex items-center">
+                        <span class="w-2 h-2 rounded-full mr-2" style="background-color: ${p.color}"></span>
+                        ${p.name}
+                    </span>
+                    <span>${p.score}</span>
+                </li>
+            `).join('');
+        }
+
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        const audioCtx = new AudioContext();
+
+        function playCollectSound(freq = 800) {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(freq * 1.5, audioCtx.currentTime + 0.1);
+            gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.1);
+        }
+
+        function setupJoystick() {
+            const zone = document.getElementById('joystick-zone');
+            let startX, startY;
+            zone.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                const touch = e.touches[0];
+                startX = touch.clientX;
+                startY = touch.clientY;
+            });
+            zone.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+                const touch = e.touches[0];
+                const deltaX = touch.clientX - startX;
+                const deltaY = touch.clientY - startY;
+                const maxDrag = 50;
+                joystickVector.x = Math.max(-1, Math.min(1, deltaX / maxDrag));
+                joystickVector.y = Math.max(-1, Math.min(1, deltaY / maxDrag));
+            });
+            zone.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                joystickVector = { x: 0, y: 0 };
+            });
+            zone.style.background = 'rgba(255, 255, 255, 0.1)';
+            zone.style.borderRadius = '50%';
+            zone.style.border = '2px solid rgba(0, 255, 255, 0.3)';
+        }
+
+    </script>
+</body>
+</html>
