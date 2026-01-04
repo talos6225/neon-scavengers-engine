@@ -13,7 +13,7 @@ Unlike standard .io games that rely on heavy frameworks, this project runs on a 
 The engine implements "Server Reconciliation" to handle state disagreement between the client and the authoritative server (Firebase).
 * **Client-Side Prediction:** Inputs are applied instantly to the local entity for zero-latency feedback.
 * **Reconciliation Loop:** When the server returns an authoritative state from the past, the client re-simulates all unacknowledged inputs to correct the current state without "snapping" the player.
-* **Code Location:** See `src/engine/network.js` (or your specific file path).
+* **Code Location:** Core logic is located within the main script tags in index.html.
 
 ### 2. Custom Physics System
 A lightweight 2D AABB (Axis-Aligned Bounding Box) physics engine written from scratch.
